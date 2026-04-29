@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>Бюджетный конструктор выборок</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/styles.css" />
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<div id="app" v-cloak>
+  <!-- ─── Top bar ───────────────────────────── -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">БК</div>
+      <div class="brand-text">
+        <h1>Бюджетный конструктор выборок</h1>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="health" v-if="health">
+        <span class="dot"></span>
+        <span class="health-pill">фактов <b>{{ formatCount(health.facts) }}</b></span>
+        <span v-for="(v, k) in healthSourcesShort" :key="k" class="health-pill">
+          {{ k }} <b>{{ formatCount(v) }}</b>
+        </span>
+        <span v-if="health.storage_mode" class="health-pill" :title="'Источник данных: ' + health.storage_mode">
+          {{ health.storage_mode === 'postgres' ? 'PG' : 'CSV' }}
+        </span>
+      </div>
+      <div class="settings-wrap" data-tour="settings">
+        <button class="icon-btn" title="Настройки интерфейса" @click="settingsOpen = !settingsOpen">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2a2 2 0 0 1-4 0V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1A2 2 0 0 1 4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H2.8a2 2 0 0 1 0-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7A2 2 0 0 1 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3h.1A1.7 1.7 0 0 0 10 3V2.8a2 2 0 0 1 4 0V3a1.7 1.7 0 0 0 1 1.6h.1a1.7 1.7 0 0 0 1.9-.3l.1-.1A2 2 0 0 1 19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1A1.7 1.7 0 0 0 21 10h.2a2 2 0 0 1 0 4H21a1.7 1.7 0 0 0-1.6 1Z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div v-if="settingsOpen" class="settings-menu">
+          <div class="settings-title">Интерфейс</div>
+          <div class="setting-group">
+            <span>Размер текста</span>
+            <div class="seg tiny">
+              <button :class="{ on: ui.fontSize === 'compact' }" @click="setUi('fontSize','compact')">S</button>
+              <button :class="{ on: ui.fontSize === 'normal' }" @click="setUi('fontSize','normal')">M</button>
+              <button :class="{ on: ui.fontSize === 'large' }" @click="setUi('fontSize','large')">L</button>
+              <button :class="{ on: ui.fontSize === 'xlarge' }" @click="setUi('fontSize','xlarge')">XL</button>
+            </div>
+          </div>
+          <div class="setting-group">
+            <span>Фон</span>
+            <div class="swatches">
+              <button title="Стандартный" class="swatch bg-default" :class="{ on: ui.bg === 'default' }" @click="setUi('bg','default')"></button>
+              <button title="Холодный" class="swatch bg-cool" :class="{ on: ui.bg === 'cool' }" @click="setUi('bg','cool')"></button>
+              <button title="Зеленый" class="swatch bg-mint" :class="{ on: ui.bg === 'mint' }" @click="setUi('bg','mint')"></button>
+              <button title="Нейтральный" class="swatch bg-gray" :class="{ on: ui.bg === 'gray' }" @click="setUi('bg','gray')"></button>
+            </div>
+          </div>
+          <div class="setting-group">
+            <span>Панель</span>
+            <div class="seg tiny">
+              <button :class="{ on: ui.sidebar === 'left' }" @click="setUi('sidebar','left')">слева</button>
+              <button :class="{ on: ui.sidebar === 'right' }" @click="setUi('sidebar','right')">справа</button>
+            </div>
+          </div>
+          <div class="setting-group">
+            <span>Акцент</span>
+            <div class="swatches">
+              <button title="Синий" class="swatch accent-blue" :class="{ on: ui.accent === 'blue' }" @click="setUi('accent','blue')"></button>
+              <button title="Зеленый" class="swatch accent-green" :class="{ on: ui.accent === 'green' }" @click="setUi('accent','green')"></button>
+              <button title="Янтарный" class="swatch accent-amber" :class="{ on: ui.accent === 'amber' }" @click="setUi('accent','amber')"></button>
+              <button title="Красный" class="swatch accent-red" :class="{ on: ui.accent === 'red' }" @click="setUi('accent','red')"></button>
+            </div>
+          </div>
+          <div class="setting-group">
+            <span>Диаграммы</span>
+            <div class="seg tiny">
+              <button :class="{ on: ui.chartStyle === 'classic' }" @click="setUi('chartStyle','classic')">строго</button>
+              <button :class="{ on: ui.chartStyle === 'soft' }" @click="setUi('chartStyle','soft')">мягко</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <button class="icon-btn" :title="reloading ? 'Перечитываем…' : 'Перечитать данные'" @click="reload" :disabled="reloading">
+        <svg v-if="!reloading" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.5 8a5.5 5.5 0 0 1 9.5-3.8L14 6m0 0V2.5M14 6h-3.5M13.5 8a5.5 5.5 0 0 1-9.5 3.8L2 10m0 0v3.5M2 10h3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span v-else class="spinner"></span>
+      </button>
+      <button class="icon-btn" title="Сменить тему" @click="toggleTheme">
+        <svg v-if="theme === 'dark'" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="3"/><path d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M3 3l1.1 1.1M11.9 11.9 13 13M3 13l1.1-1.1M11.9 4.1 13 3" stroke-linecap="round"/></svg>
+        <svg v-else viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 9.5A6 6 0 0 1 6.5 3a.5.5 0 0 0-.7-.5A6 6 0 1 0 13.5 10.2a.5.5 0 0 0-.5-.7Z" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ─── Layout ────────────────────────────── -->
+  <div class="layout" :class="appShellClasses">
+    <aside class="sidebar" data-tour="filters">
+      <!-- Step 1: Раздел / тип -->
+      <section class="step">
+        <div class="step-head">
+          <span class="step-num" :class="{ done: form.section || form.types.length, active: !(form.section || form.types.length) }">
+            <svg v-if="form.section || form.types.length" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 8 3.5 3.5L13 5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <template v-else>1</template>
+          </span>
+          <h3 class="step-title">Раздел / тип данных</h3>
+          <span class="step-summary">{{ stepSummary1 }}</span>
+        </div>
+        <div class="chips-row">
+          <label class="chip" :class="{ on: form.section === null }" @click="form.section = null; reloadObjects()">
+            <span>Все</span>
+          </label>
+          <label v-for="s in sections" :key="s.id" class="chip" :class="{ on: form.section === s.id }" @click="form.section = s.id; reloadObjects()">
+            <span>{{ shortSectionTitle(s.title) }}</span>
+          </label>
+        </div>
+        <div class="chips-row" v-if="objectTypes.length">
+          <label v-for="t in objectTypes" :key="t.id" class="chip" :class="{ on: form.types.includes(t.id) }" @click="toggleType(t.id)">
+            <span>{{ t.title }}</span>
+            <em>{{ t.count }}</em>
+          </label>
+        </div>
+      </section>
+
+      <!-- Step 2: Объекты -->
+      <section class="step">
+        <div class="step-head">
+          <span class="step-num" :class="{ done: form.objects.length, active: !form.objects.length }">
+            <svg v-if="form.objects.length" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 8 3.5 3.5L13 5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <template v-else>2</template>
+          </span>
+          <h3 class="step-title">Объекты</h3>
+          <span class="step-summary">{{ form.objects.length ? form.objects.length + ' выбрано' : 'не выбраны' }}</span>
+        </div>
+        <div class="input-search">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3" stroke-linecap="round"/></svg>
+          <input class="input" type="text" v-model="form.query" @input="onSearchInput" placeholder="название, КЦСР, КВР, ДопКР…" />
+          <button v-if="form.query" class="input-clear" @click="clearQuery" title="Очистить">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m4 4 8 8M12 4l-8 8" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+
+        <div class="selected-list" v-if="selectedObjectsResolved.length">
+          <div class="sel-item" v-for="obj in selectedObjectsResolved" :key="obj.id">
+            <span class="name" :title="obj.name">{{ obj.name }}</span>
+            <span class="code" v-if="obj.kcsr || obj.dopkr">{{ obj.kcsr ? 'КЦСР ' + obj.kcsr : 'ДопКР ' + obj.dopkr }}</span>
+            <button class="remove" @click="removeObject(obj.id)" title="Убрать">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m4 4 8 8M12 4l-8 8" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="objects-list">
+          <div v-if="loadingObjects" class="hint" style="padding: 10px 12px;">загрузка…</div>
+          <div v-else-if="!objects.length" class="hint" style="padding: 10px 12px;">ничего не найдено</div>
+          <label v-for="obj in objects" :key="obj.id" class="obj-row" :class="{ active: form.objects.includes(obj.id) }">
+            <input type="checkbox" :value="obj.id" v-model="form.objects" />
+            <div class="obj-meta">
+              <div class="obj-name" :class="{ expanded: expandedObjects[obj.id] }" :title="obj.name" @click.prevent.stop="toggleObjectText(obj.id)">{{ obj.name }}</div>
+              <div class="obj-tags">
+                <span v-if="obj.kcsr" class="tag">КЦСР {{ obj.kcsr }}</span>
+                <span v-if="obj.kvr" class="tag">КВР {{ obj.kvr }}</span>
+                <span v-if="obj.dopkr" class="tag">ДопКР {{ obj.dopkr }}</span>
+                <span class="tag tag-soft">{{ obj.facts }} зап.</span>
+              </div>
+            </div>
+            <div class="obj-total">{{ formatMoneyShort(obj.total) }}</div>
+          </label>
+        </div>
+        <div class="hint" v-if="objects.length === 200">показаны первые 200 — уточните запрос</div>
+      </section>
+
+      <!-- Step 3: Показатели -->
+      <section class="step">
+        <div class="step-head">
+          <span class="step-num" :class="{ done: form.metrics.length, active: !form.metrics.length }">
+            <svg v-if="form.metrics.length" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 8 3.5 3.5L13 5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <template v-else>3</template>
+          </span>
+          <h3 class="step-title">Показатели</h3>
+          <span class="step-summary">{{ form.metrics.length ? form.metrics.length + ' выбрано' : 'не выбраны' }}</span>
+        </div>
+        <div class="chips-row">
+          <button v-for="(p, key) in presets" :key="key" class="preset" :class="{ on: isPresetActive(key) }" @click="applyPreset(key)">
+            {{ p.title }}
+            <span class="count">{{ p.metrics.length }}</span>
+          </button>
+        </div>
+        <div v-for="(group, gname) in groupedMetrics" :key="gname" style="margin-top: 6px;">
+          <div class="field-label" style="margin-bottom: 4px;">{{ gname }}</div>
+          <div class="chips-row">
+            <label v-for="m in group" :key="m.code" class="chip" :class="{ on: form.metrics.includes(m.code) }" @click="toggleMetric(m.code)">
+              <span>{{ m.name }}</span>
+              <em>{{ sourceShort(m.source) }}</em>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <!-- Step 4: Период -->
+      <section class="step">
+        <div class="step-head">
+          <span class="step-num done">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 8 3.5 3.5L13 5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          <h3 class="step-title">Период</h3>
+          <span class="step-summary">{{ periodSummary }}</span>
+        </div>
+        <div class="seg">
+          <button :class="{ on: form.period.type === 'all' }" @click="form.period.type = 'all'">Все</button>
+          <button :class="{ on: form.period.type === 'as_of' }" @click="form.period.type = 'as_of'">На дату</button>
+          <button :class="{ on: form.period.type === 'range' }" @click="form.period.type = 'range'">Период</button>
+          <button :class="{ on: form.period.type === 'compare' }" @click="form.period.type = 'compare'">Сравнение</button>
+        </div>
+        <div v-if="form.period.type === 'as_of'" class="date-input mt-8">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3.5" width="12" height="11" rx="1.5"/><path d="M2 6.5h12M5 2v3M11 2v3" stroke-linecap="round"/></svg>
+          <input class="input" type="date" v-model="form.period.date" />
+        </div>
+        <div v-if="form.period.type === 'range'" class="date-pair mt-8">
+          <div class="date-input">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3.5" width="12" height="11" rx="1.5"/><path d="M2 6.5h12M5 2v3M11 2v3" stroke-linecap="round"/></svg>
+            <input class="input" type="date" v-model="form.period.date_from" />
+          </div>
+          <div class="date-input">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3.5" width="12" height="11" rx="1.5"/><path d="M2 6.5h12M5 2v3M11 2v3" stroke-linecap="round"/></svg>
+            <input class="input" type="date" v-model="form.period.date_to" />
+          </div>
+        </div>
+        <div v-if="form.period.type === 'compare'" class="date-pair mt-8">
+          <div class="date-input">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3.5" width="12" height="11" rx="1.5"/><path d="M2 6.5h12M5 2v3M11 2v3" stroke-linecap="round"/></svg>
+            <input class="input" type="date" v-model="form.period.date_a" />
+          </div>
+          <div class="date-input">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3.5" width="12" height="11" rx="1.5"/><path d="M2 6.5h12M5 2v3M11 2v3" stroke-linecap="round"/></svg>
+            <input class="input" type="date" v-model="form.period.date_b" />
+          </div>
+        </div>
+      </section>
+
+      <!-- Saved presets feature -->
+      <section class="step" v-if="savedPresets.length">
+        <div class="step-head">
+          <span class="step-num done">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 8 3.5 3.5L13 5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          <h3 class="step-title">Сохранённые пресеты</h3>
+          <span class="step-summary">{{ savedPresets.length }}</span>
+        </div>
+        <div class="chips-row">
+          <button v-for="(p, idx) in savedPresets" :key="idx" class="preset" @click="loadSavedPreset(p)" :title="'Кликните, чтобы загрузить'">
+            {{ p.name }}
+            <span class="count" @click.stop="deleteSavedPreset(idx)" style="cursor:pointer;" title="Удалить">×</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- Actions -->
+      <div class="actions" data-tour="actions">
+        <button class="btn primary" :disabled="loadingResult" @click="buildSelection">
+          <span v-if="loadingResult" class="spinner white"></span>
+          <svg v-else viewBox="0 0 16 16" fill="currentColor"><path d="M4 3.5v9l8-4.5z"/></svg>
+          {{ loadingResult ? 'Считаем…' : 'Построить выборку' }}
+        </button>
+        <button class="btn ghost" @click="resetForm" title="Сбросить форму">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m4 4 8 8M12 4l-8 8" stroke-linecap="round"/></svg>
+          Очистить
+        </button>
+      </div>
+    </aside>
+
+    <!-- ─── Main content ─────────────────────── -->
+    <main class="content">
+      <section class="assistant-panel" data-tour="guide">
+        <div class="quick-strip">
+          <button v-for="q in quickQuestions" :key="q" class="quick-question" @click="useQuickQuestion(q)">{{ q }}</button>
+        </div>
+        <div class="smart-search" data-tour="smart-search">
+          <button class="smart-report-btn" @click="buildQuickReport" :disabled="loadingResult" title="Сформировать быстрый отчет">
+            <svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 3.5v9l8-4.5z"/></svg>
+          </button>
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3" stroke-linecap="round"/></svg>
+          <input class="input" type="text" v-model="smartQuery" @input="onSmartInput" @keydown.enter="submitSmartSearch" placeholder="Глобальный поиск: детский сад Свободный, КЦСР, КВР, контрагент, номер документа…" />
+          <button v-if="smartQuery" class="input-clear smart-clear" @click="clearSmartSearch" title="Очистить">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m4 4 8 8M12 4l-8 8" stroke-linecap="round"/></svg>
+          </button>
+          <button class="voice-btn" :class="{ active: voiceActive }" @click="startVoiceInput" title="Голосовой ввод">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2.2a2 2 0 0 0-2 2v3.2a2 2 0 0 0 4 0V4.2a2 2 0 0 0-2-2Z"/><path d="M3.8 7.2a4.2 4.2 0 0 0 8.4 0M8 11.4V14m-2.2 0h4.4" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+        <div class="smart-results" v-if="smartQuery && (smartLoading || smartResults.length)">
+          <div v-if="smartLoading" class="smart-item muted">Ищем по объектам, кодам, документам и контрагентам…</div>
+          <button v-else v-for="obj in smartResults" :key="obj.id" class="smart-item" @click="selectSmartResult(obj)">
+            <span>
+              <b>{{ smartTitle(obj) }}</b>
+              <small>{{ smartContext(obj) }}</small>
+            </span>
+            <em>{{ smartTags(obj) }}</em>
+          </button>
+        </div>
+      </section>
+
+      <!-- Empty state -->
+      <div v-if="!result && !loadingResult" class="onboarding-state">
+        <div>
+          <h3>Как собрать отчет</h3>
+          <p>Начните с вопроса или объекта в глобальном поиске. Система подберет объект, поможет включить показатели и подсветит риски после построения выборки.</p>
+        </div>
+        <div class="guide-line">
+          <span>1. Найдите объект или задайте вопрос</span>
+          <span>2. Проверьте показатели и период</span>
+          <span>3. Постройте выборку или быстрый Excel</span>
+        </div>
+        <button class="btn ghost slim" @click="startTour">Пройти обучение</button>
+      </div>
+
+      <!-- Loading state -->
+      <div v-else-if="loadingResult && !result">
+        <div class="kpi-grid" style="margin-bottom: 24px;">
+          <div class="kpi" v-for="i in 6" :key="i">
+            <div class="skeleton" style="height: 12px; width: 50%; margin-bottom: 8px;"></div>
+            <div class="skeleton" style="height: 24px; width: 70%; margin-bottom: 6px;"></div>
+            <div class="skeleton" style="height: 10px; width: 40%;"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <div class="row"><span class="spinner"></span><span class="muted">Считаем выборку…</span></div>
+          </div>
+          <div class="card-body padded">
+            <div class="row mt-8" v-for="i in 5" :key="i" style="gap: 12px;">
+              <div class="skeleton" style="height: 14px; flex: 2;"></div>
+              <div class="skeleton" style="height: 14px; flex: 1;"></div>
+              <div class="skeleton" style="height: 14px; flex: 1;"></div>
+              <div class="skeleton" style="height: 14px; flex: 1;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Result -->
+      <div v-else-if="result">
+        <div class="result-head">
+          <div>
+            <h2>Выборка{{ result.summary.length ? ' по ' + result.summary.length + ' ' + plural(result.summary.length, 'объекту','объектам','объектам') : '' }}</h2>
+            <div class="sub">{{ resultSubtitle }}</div>
+          </div>
+          <div class="result-actions">
+            <button class="btn" @click="exportExcel" :disabled="loadingResult">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2v9m0 0L5 8m3 3 3-3M3 13h10" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Excel
+            </button>
+            <button class="btn ghost" @click="saveCurrentAsPreset">Сохранить пресет</button>
+          </div>
+        </div>
+
+        <div v-if="!result.summary.length" class="state empty-data">
+          <div class="icon">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3" stroke-linecap="round"/></svg>
+          </div>
+          <h3>По выбранным параметрам данные не найдены</h3>
+          <p>Попробуйте изменить период, выбрать другой объект или включить больше показателей.</p>
+        </div>
+
+        <template v-else>
+        <div class="tabs">
+          <button v-for="t in availableTabs" :key="t.id" class="tab" :class="{ active: tab === t.id }" @click="tab = t.id">
+            {{ t.title }}<span class="count">{{ t.count }}</span>
+          </button>
+        </div>
+
+        <!-- Сводная -->
+        <template v-if="tab === 'summary'">
+          <div class="kpi-grid">
+            <div v-for="k in kpis" :key="k.code" class="kpi" :class="{ accent: k.accent }">
+              <div class="kpi-label">
+                {{ k.name }}
+                <span class="kpi-source">{{ sourceShort(k.source) }}</span>
+              </div>
+              <div class="kpi-value">{{ k.pct ? formatPct(k.value) : formatKpi(k.value) }}</div>
+              <div v-if="k.delta" :class="['kpi-delta', k.delta.value >= 0 ? 'up' : 'down']">
+                <svg v-if="k.delta.value >= 0" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 13V3m0 0L4 7m4-4 4 4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <svg v-else viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 3v10m0 0L4 9m4 4 4-4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                {{ formatDelta(k.delta.value) }}
+                <span class="faint" style="margin-left:2px;">{{ k.delta.label }}</span>
+              </div>
+              <div v-else class="kpi-delta flat">—</div>
+            </div>
+          </div>
+
+          <div class="analytics-card" v-if="analytics.length">
+            <h3>Короткие аналитические выводы</h3>
+            <ul>
+              <li v-for="line in analytics" :key="line">{{ line }}</li>
+            </ul>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <h3>Сводная таблица</h3>
+              <span class="meta">{{ result.summary.length }} {{ plural(result.summary.length, 'объект','объекта','объектов') }}</span>
+            </div>
+            <div class="card-body">
+              <div class="table-wrap">
+                <table class="tbl">
+                  <thead>
+                    <tr>
+                      <th>Объект</th>
+                      <th v-if="hasRisks">Риск</th>
+                      <th class="num" v-for="m in result.metric_meta" :key="m.code">{{ m.name }}</th>
+                      <th class="num" v-if="hasExec">% исполнения</th>
+                      <th class="num" v-if="hasUnpaid">Неоплач. БО</th>
+                      <th class="num" v-if="hasUncontracted">Неконтрактованный остаток</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(row, idx) in result.summary" :key="idx" :class="riskClass(row)">
+                      <td>
+                        <div class="row-name" :class="{ expanded: expandedSummary[idx] }" :title="row.object" @click="toggleSummaryText(idx)">{{ row.object }}</div>
+                      </td>
+                      <td v-if="hasRisks"><span :class="['risk-chip', riskClass(row)]" :title="(row.risk_reasons || []).join('; ')">{{ riskTitle(row) }}</span></td>
+                      <td v-for="m in result.metric_meta" :key="m.code" class="num">{{ formatMoney(row[m.code]) }}</td>
+                      <td v-if="hasExec" class="num">
+                        <span class="pct-cell" v-if="row.exec_pct !== undefined && row.exec_pct !== null">
+                          <span class="minibar">
+                            <span class="fill" :style="{ width: Math.min(100, Math.max(0, row.exec_pct)) + '%', background: pctColor(row.exec_pct) }"></span>
+                          </span>
+                          <span class="pct-num">{{ row.exec_pct.toFixed(1) }}%</span>
+                        </span>
+                        <span v-else class="muted">—</span>
+                      </td>
+                      <td v-if="hasUnpaid" class="num">{{ formatMoney(row.unpaid_bo) }}</td>
+                      <td v-if="hasUncontracted" class="num">{{ formatMoney(row.uncontracted) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <!-- Динамика -->
+        <template v-if="tab === 'dynamic'">
+          <div class="card">
+            <div class="card-head">
+              <h3>Динамика по месяцам</h3>
+              <span class="meta">{{ result.dynamic.length }} точек</span>
+            </div>
+            <div class="chart-box">
+              <canvas ref="chartCanvas"></canvas>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h3>Таблица динамики</h3></div>
+            <div class="card-body">
+              <div class="table-wrap">
+                <table class="tbl">
+                  <thead>
+                    <tr>
+                      <th>Месяц</th>
+                      <th v-for="m in result.metric_meta" :key="m.code" class="num">{{ m.name }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(row, idx) in result.dynamic" :key="idx">
+                      <td>{{ row.month }}</td>
+                      <td v-for="m in result.metric_meta" :key="m.code" class="num">{{ formatMoney(row[m.code]) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <!-- Сравнение -->
+        <template v-if="tab === 'chart'">
+          <div class="card">
+            <div class="card-head">
+              <h3>Сравнение объектов</h3>
+              <span class="meta">топ-12 по сумме</span>
+            </div>
+            <div class="chart-box">
+              <canvas ref="barCanvas"></canvas>
+            </div>
+          </div>
+        </template>
+
+        <!-- Снимки A↔B -->
+        <template v-if="tab === 'snap' && snapshotsAvailable">
+          <div class="card">
+            <div class="card-head">
+              <h3>Сравнение двух дат</h3>
+              <span class="meta">{{ form.period.date_a }} ↔ {{ form.period.date_b }}</span>
+            </div>
+            <div class="card-body padded">
+              <div class="compare-snapshots">
+                <div class="snap-col">
+                  <h4>Снимок A <span class="date-stamp">{{ form.period.date_a || '—' }}</span></h4>
+                  <div class="snap-row" v-for="m in result.metric_meta" :key="m.code">
+                    <span class="muted">{{ m.name }}</span>
+                    <span class="v">{{ formatMoney(snapshotA[m.code]) }}</span>
+                  </div>
+                </div>
+                <div class="snap-col">
+                  <h4>Снимок B <span class="date-stamp">{{ form.period.date_b || '—' }}</span></h4>
+                  <div class="snap-row" v-for="m in result.metric_meta" :key="m.code">
+                    <span class="muted">{{ m.name }}</span>
+                    <span style="display: inline-flex; gap: 10px; align-items: baseline;">
+                      <span class="v">{{ formatMoney(snapshotB[m.code]) }}</span>
+                      <span :class="['delta', snapDelta(m.code).up ? 'up' : 'down']" v-if="snapDelta(m.code).visible">
+                        {{ snapDelta(m.code).text }}
+                      </span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <!-- Детализация -->
+        <template v-if="tab === 'details'">
+          <div class="card">
+            <div class="card-head">
+              <h3>Детализация</h3>
+              <span class="meta">показано {{ result.details.length }} {{ plural(result.details.length, 'строка','строки','строк') }} (макс. 2000)</span>
+            </div>
+            <div class="card-body" style="padding: 0;">
+              <div class="detail-row head">
+                <span>Дата</span>
+                <span>Источник</span>
+                <span>Показатель / Объект</span>
+                <span style="text-align: right;">Документ</span>
+                <span style="text-align: right;">Сумма, ₽</span>
+              </div>
+              <div class="detail-row" v-for="(d, idx) in result.details" :key="idx">
+                <span class="date">{{ d.date || '—' }}</span>
+                <span><span class="src-badge">{{ sourceShort(d.source) }}</span></span>
+                <span>
+                  <div style="font-weight: 500;">{{ d.metric_name }}</div>
+                  <div class="muted" style="font-size: 11.5px; margin-top: 2px;">{{ d.object_name }}</div>
+                </span>
+                <span class="num muted" style="font-size: 11.5px;">
+                  <template v-if="d.doc_no">{{ d.doc_type }} № {{ d.doc_no }}</template>
+                  <template v-else-if="d.doc_type">{{ d.doc_type }}</template>
+                  <template v-else>—</template>
+                </span>
+                <span class="num">{{ formatMoney(d.amount) }}</span>
+              </div>
+              <div v-if="!result.details.length" class="hint" style="padding: 14px 18px;">нет данных за выбранный период</div>
+            </div>
+          </div>
+        </template>
+        </template>
+      </div>
+    </main>
+  </div>
+
+  <div v-if="tourOpen" class="tour-overlay" @click.self="closeTour">
+    <div class="tour-card">
+      <div class="tour-progress">{{ tourIndex + 1 }} / 5</div>
+      <h3>{{ currentTourStep.title }}</h3>
+      <p>{{ currentTourStep.text }}</p>
+      <div class="tour-actions">
+        <button class="btn ghost" @click="closeTour">Пропустить</button>
+        <button class="btn primary" @click="nextTourStep">{{ tourIndex === 4 ? 'Завершить' : 'Далее' }}</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="chatbot-dock">
+    <button class="chatbot-btn" @click="chatOpen = !chatOpen" title="Помощник по выборке">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4.2A2.2 2.2 0 0 1 5.2 2h5.6A2.2 2.2 0 0 1 13 4.2v3.9a2.2 2.2 0 0 1-2.2 2.2H8.5L5.2 13v-2.7A2.2 2.2 0 0 1 3 8.1V4.2Z" stroke-linejoin="round"/><path d="M5.7 5.9h4.6M5.7 8h2.8" stroke-linecap="round"/></svg>
+    </button>
+    <div v-if="chatOpen" class="chatbot-panel">
+      <div class="chatbot-head">
+        <strong>Помощник выборки</strong>
+        <button @click="chatOpen = false" title="Закрыть">×</button>
+      </div>
+      <p>Оптимальный сценарий: вопрос пользователя разбирается локально, превращается в фильтры, набор показателей и краткое объяснение рисков.</p>
+      <div class="chatbot-stack">
+        <button @click="useQuickQuestion('Где есть лимит, но нет кассы?')">Найти лимит без кассы</button>
+        <button @click="useQuickQuestion('Какие объекты требуют внимания?')">Показать зоны риска</button>
+        <button @click="buildQuickReport">Собрать быстрый Excel</button>
+      </div>
+      <div class="chatbot-note">
+        Для бесплатного локального режима подойдет связка: индекс объектов и документов в приложении, rule-based fallback, затем локальная LLM через Ollama/llama.cpp. Предпочтительный контур: русскоязычная GGUF-модель семейства Saiga; при недоступности — любая бесплатная instruct-модель с хорошим русским.
+      </div>
+    </div>
+  </div>
+
+  <!-- Toasts -->
+  <div class="toast-host">
+    <div v-for="t in toasts" :key="t.id" :class="['toast', t.type]">
+      <span>{{ t.text }}</span>
+      <button class="close" @click="dismissToast(t.id)">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m4 4 8 8M12 4l-8 8" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
