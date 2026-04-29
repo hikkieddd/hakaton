@@ -1,0 +1,12 @@
+fastapi>=0.115
+uvicorn[standard]>=0.32
+pandas>=2.2
+openpyxl>=3.1
+xlsxwriter>=3.2
+python-multipart>=0.0.9
+python-docx>=1.1
+# --- Опциональный режим PostgreSQL --------------------------------
+# Раскомментируйте две строки ниже и задайте переменную окружения
+# BK_DATABASE_URL=postgresql+psycopg://user:pass@host:5432/dbname
+# sqlalchemy>=2.0
+# psycopg[binary]>=3.1

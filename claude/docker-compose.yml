@@ -1,0 +1,13 @@
+services:
+  budget-constructor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: budget-constructor
+    restart: unless-stopped
+    ports:
+      - "80:8765"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONIOENCODING=utf-8
+      - BK_DATA_DIR=/srv/data
